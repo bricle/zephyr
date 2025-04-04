@@ -1,0 +1,6 @@
+# Copyright (c) 2020 Google LLC.
+# Copyright (c) 2024 Gerson Fernando Budke <nandojve@gmail.com>
+# SPDX-License-Identifier: Apache-2.0
+
+config BOARD_CURI_NANO
+	select SOC_SAME51J20A

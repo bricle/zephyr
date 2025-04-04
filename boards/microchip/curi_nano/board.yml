@@ -1,0 +1,6 @@
+board:
+  name: curi_nano
+  full_name: curi nano
+  vendor: adafruit
+  socs:
+    - name: samd51g19a
