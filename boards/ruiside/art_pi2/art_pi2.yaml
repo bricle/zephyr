@@ -11,4 +11,6 @@ supported:
   - uart
   - watchdog
   - entropy
+  - memc
+  - octospi
 vendor: ruiside
