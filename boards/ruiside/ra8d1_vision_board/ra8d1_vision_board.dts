@@ -11,6 +11,7 @@
 #include <zephyr/dt-bindings/memory-attr/memory-attr-arm.h>
 #include <zephyr/dt-bindings/memory-controller/renesas,ra-sdram.h>
 #include "ra8d1_vision_board-pinctrl.dtsi"
+#include <zephyr/dt-bindings/display/panel.h>
 
 / {
 	model = "Ruiside Electronic RA8D1-VISION-BOARD";
@@ -23,6 +24,7 @@
 		zephyr,shell-uart = &uart9;
 		zephyr,entropy = &trng;
 		zephyr,flash-controller = &flash;
+		zephyr,display = &zephyr_lcdif;
 	};
 
 	leds {
@@ -55,10 +57,11 @@
 	};
 
 	sdram1: sdram@68000000 {
-		    compatible = "zephyr,memory-region", "mmio-sram";
-		    reg = <0x68000000 DT_SIZE_M(32)>;
-		    zephyr,memory-region = "SDRAM";
-		    status = "okay";
+		compatible = "zephyr,memory-region", "mmio-sram";
+		reg = <0x68000000 DT_SIZE_M(32)>;
+		zephyr,memory-region = "SDRAM";
+		zephyr,memory-attr = <( DT_MEM_ARM(ATTR_MPU_RAM_NOCACHE) )>;
+		status = "okay";
 	};
 
 	aliases {
@@ -98,6 +101,19 @@
 	};
 };
 
+&pll2 {
+	status = "okay";
+	clocks = <&xtal>;
+	div = <1>;
+	mul = <48 0>;
+
+	pll2r {
+		status = "okay";
+		freq = <DT_FREQ_M(480)>;
+		div = <2>;
+	};
+};
+
 &sciclk {
 	clocks = <&pllp>;
 	div = <4>;
@@ -110,11 +126,21 @@
 	status = "okay";
 };
 
+&lcdclk {
+	clocks = <&pll2r>;
+	div = <2>;
+	status = "okay";
+};
+
 &ioport0 {
 	status = "okay";
 };
 
 &ioport1 {
+	status = "okay";
+};
+
+&ioport2 {
 	status = "okay";
 };
 
@@ -130,6 +156,10 @@
 	status = "okay";
 };
 
+&ioport7 {
+	status = "okay";
+};
+
 &ioport8 {
 	status = "okay";
 };
@@ -139,6 +169,10 @@
 };
 
 &ioporta {
+	status = "okay";
+};
+
+&ioportb {
 	status = "okay";
 };
 
@@ -176,27 +210,27 @@
 };
 
 &sdram {
-	    pinctrl-0 = <&sdram_default>;
-	    pinctrl-names = "default";
-	    status = "okay";
-	    auto-refresh-interval = <SDRAM_AUTO_REFREDSH_INTERVEL_10CYCLES>;
-	    auto-refresh-count = <SDRAM_AUTO_REFREDSH_COUNT_8TIMES>;
-	    precharge-cycle-count = <SDRAM_AUTO_PRECHARGE_CYCLE_3CYCLES>;
-	    multiplex-addr-shift = "9-bit";
-	    edian-mode = "little-endian";
-	    continuous-access;
-	    bus-width = "16-bit";
+	pinctrl-0 = <&sdram_default>;
+	pinctrl-names = "default";
+	status = "okay";
+	auto-refresh-interval = <SDRAM_AUTO_REFREDSH_INTERVEL_10CYCLES>;
+	auto-refresh-count = <SDRAM_AUTO_REFREDSH_COUNT_8TIMES>;
+	precharge-cycle-count = <SDRAM_AUTO_PRECHARGE_CYCLE_3CYCLES>;
+	multiplex-addr-shift = "9-bit";
+	edian-mode = "little-endian";
+	continuous-access;
+	bus-width = "16-bit";
 
-	    bank@0 {
-			reg = <0>;
-			renesas,ra-sdram-timing = <SDRAM_TRAS_4CYCLES
-			SDRAM_TRCD_2CYCLES
-			SDRAM_TRP_2CYCLES
-			SDRAM_TWR_2CYCLES
-			SDRAM_TCL_3CYCLES
-			937
-			SDRAM_TREFW_8CYCLES>;
-	    };
+	bank@0 {
+		reg = <0>;
+		renesas,ra-sdram-timing = <SDRAM_TRAS_4CYCLES
+		SDRAM_TRCD_2CYCLES
+		SDRAM_TRP_2CYCLES
+		SDRAM_TWR_2CYCLES
+		SDRAM_TCL_3CYCLES
+		937
+		SDRAM_TREFW_8CYCLES>;
+	};
 };
 
 &sdhc1 {
@@ -216,4 +250,101 @@
 
 &wdt {
 	status = "okay";
+};
+
+zephyr_lcdif: &lcdif {
+	input-pixel-format = <PANEL_PIXEL_FORMAT_RGB_565>;
+	status = "okay";
+	width = <480>;
+	height = <360>;
+	// input-pixel-format = <PANEL_PIXEL_FORMAT_RGB_888>;
+	output-pixel-format = <PANEL_PIXEL_FORMAT_RGB_565>;
+	output-clock-divisor = <8>;
+	display-timings {
+		compatible = "zephyr,panel-timing";
+		hsync-active = <0>;          /* 高电平有效 -> 设置为0（低电平为非激活态） */
+		vsync-active = <0>;          /* 高电平有效 -> 设置为0 */
+		de-active = <1>;
+		syncclk-active = <1>;
+		pixelclk-active = <0>;
+		hback-porch = <20>;
+		hsync-len = <4>;
+		hfront-porch = <10>;
+		vback-porch = <10>;
+		vsync-len = <4>;
+		vfront-porch = <8>;
+		// clock-frequency = <DT_FREQ_M(40)>;
+	};
+
+	backlight-gpios = <&ioporta 11 GPIO_ACTIVE_HIGH>;
+};
+
+zephyr_mipi_dsi: &mipi_dsi {
+	status = "okay";
+	pll-div = <1>;
+	pll-mul-int = <50>;
+	pll-mul-frac = "0.00";
+	lp-divisor = <5>;
+	ulps-wakeup-period = <97>;
+	video-mode-delay = <206>;
+	timing = <1183 11 26 40>;
+
+	phys-timing {
+		t-init = <71999>;
+		t-clk-prep = <8>;
+		t-hs-prep = <5>;
+		t-lp-exit = <7>;
+		dphytim4 = <27 1 19 7>;
+		dphytim5 = <19 8 11>;
+	};
+	ili9806e: ili9806e@0 {
+		status = "okay";
+		compatible = "ilitek,ili9806e-dsi";
+		reg = <0x0>;
+		height = <360>;
+		width = <480>;
+		data-lanes = <2>;
+		pixel-format = <MIPI_DSI_PIXFMT_RGB565>;
+	};
+	// status = "okay";
+	// st7701: st7701@0 {
+	// 	    status = "okay";
+	// 	    compatible = "sitronix,st7701";
+	// 	    reg = <0x0>;
+	// 	    height = <360>;
+	// 	    width = <480>;
+	// 	    data-lanes = <2>;
+	// 	    pixel-format = <MIPI_DSI_PIXFMT_RGB565>;
+	// 	    rotation = <0>;
+	// 	    gip-e0 = [ E0 00 00 02  ];
+	// 	    gip-e1 = [ E1 08 00 0A 00 07 00 09 00 00 33 33  ];
+	// 	    gip-e2 = [ E2 00 00 00 00 00 00 00 00 00 00 00 00 00  ];
+	// 	    gip-e3 = [ E3 00 00 33 33  ];
+	// 	    gip-e4 = [ E4 44 44  ];
+	// 	    gip-e5 = [ E5 0E 60 A0 A0 10 60 A0 A0 0A 60 A0 A0 0C 60 A0 A0  ];
+	// 	    gip-e6 = [ E6 00 00 33 33  ];
+	// 	    gip-e7 = [ E7 44 44  ];
+	// 	    gip-e8 = [ E8 0D 60 A0 A0 0F 60 A0 A0 09 60 A0 A0 0B 60 A0 A0  ];
+	// 	    gip-eb = [ EB 02 01 E4 E4 44 00 40  ];
+	// 	    gip-ec = [ EC 02 01  ];
+	// 	    gip-ed = [ ED AB 89 76 54 01 FF FF FF FF FF FF 10 45 67 98 BA  ];
+	// 	    gip-ed = [ ED AB 89 76 54 01 FF FF FF FF FF FF 10 45 67 98 BA  ];
+	// 	    pvgamctrl = [ B0 40 C9 91 0D 12 07 02 09 09 1F 04 50 0F E4 29 DF  ];
+	// 	    nvgamctrl = [ B1 40 CB D0 11 92 07 00 08 07 1C 06 53 12 63 EB DF  ];
+
+	// 	    display-timings {
+	// 		        compatible = "zephyr,panel-timing";
+	// 		        hsync-active = <0>;          /* 高电平有效 -> 设置为0（低电平为非激活态） */
+	// 		        vsync-active = <0>;          /* 高电平有效 -> 设置为0 */
+	// 		        de-active = <0>;
+	// 		        pixelclk-active = <0>;
+	// 		        hback-porch = <16>;
+	// 		        hsync-len = <4>;
+	// 		        hfront-porch = <10>;
+	// 		        vback-porch = <6>;
+	// 		        vsync-len = <4>;
+	// 		        vfront-porch = <8>;
+	// 	    };
+
+	// };
 };

@@ -11,3 +11,18 @@ config SD_CMD_TIMEOUT
 endif # DISK_DRIVER_SDMMC
 
 endif # BOARD_RA8D1_VISION_BOARD
+# config MIPI_DSI
+# 	default y
+
+if DISPLAY
+
+
+config MEMC
+	default y
+
+config RENESAS_RA_GLCDC_FRAME_BUFFER_SECTION
+	default ".sdram"
+	depends on RENESAS_RA_GLCDC
+
+
+endif # DISPLAY

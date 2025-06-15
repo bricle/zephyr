@@ -488,7 +488,7 @@ static int st7701_init(const struct device *dev)
 		.dsi_pixel_format = DT_INST_PROP(inst, pixel_format),                              \
 	};                                                                                         \
 	DEVICE_DT_INST_DEFINE(inst, &st7701_init, NULL, &st7701_data_##inst,                       \
-			      &st7701_config_##inst, POST_KERNEL,                                  \
-			      CONFIG_DISPLAY_INIT_PRIORITY, &st7701_api);
+			      &st7701_config_##inst, POST_KERNEL, CONFIG_DISPLAY_INIT_PRIORITY,    \
+			      &st7701_api);
 
 DT_INST_FOREACH_STATUS_OKAY(ST7701_DEVICE)
