@@ -330,47 +330,48 @@ static int ili9806e_config(const struct device *dev)
 	const struct ili9806e_config *cfg = dev->config;
 	int ret;
 
+	/* 初始化寄存器配置 */
 	ret = ili9806e_write_sequence(dev, init_cmds, ARRAY_SIZE(init_cmds));
 	if (ret < 0) {
 		LOG_ERR("Failed writing init sequence: %d", ret);
 		return ret;
 	}
-	/* Add a delay, otherwise MADCTL not taken */
-	k_msleep(120);
 
-	// uint8_t display_on_buf = 0;
-	// /* display on */
-	// ret = ili9806e_write_reg(dev, 0x29, &display_on_buf, 1);
-	// if (ret < 0) {
-	// 	return ret;
-	// }
-	/* Exit sleep mode */
+	/* 延迟一段时间等待芯片准备 */
+	k_msleep(10);
+
+	/* Sleep Out（退出睡眠） */
 	ret = ili9806e_write_reg(dev, MIPI_DCS_EXIT_SLEEP_MODE, NULL, 0);
 	if (ret < 0) {
 		LOG_ERR("Failed to exit sleep mode: %d", ret);
 		return ret;
 	}
 
-	/* Wait for sleep out exit */
-	k_msleep(50);
+	/* 等待 120ms，确保面板唤醒完成 */
+	k_msleep(120);
 
-	/* Set color mode */
-	// ret = ili9806e_write_reg_val(dev, MIPI_DCS_SET_PIXEL_FORMAT,
-	// 			     cfg->pixel_format == PIXEL_FORMAT_RGB_565
-	// 				     ? ILITEK_ILI9806E_COLMOD_RGB565
-	// 				     : ILITEK_ILI9806E_COLMOD_RGB888);
-	// if (ret < 0) {
-	// 	LOG_ERR("Failed to set pixel format: %d", ret);
-	// 	return ret;
-	// }
+	/* 设置像素格式 */
+	ret = ili9806e_write_reg_val(dev, MIPI_DCS_SET_PIXEL_FORMAT,
+				     cfg->pixel_format == PIXEL_FORMAT_RGB_565
+					     ? ILITEK_ILI9806E_COLMOD_RGB565
+					     : ILITEK_ILI9806E_COLMOD_RGB888);
+	if (ret < 0) {
+		LOG_ERR("Failed to set pixel format: %d", ret);
+		return ret;
+	}
 
-	/* Turn on display */
+	/* 显示开启 */
 	ret = ili9806e_write_reg(dev, MIPI_DCS_SET_DISPLAY_ON, NULL, 0);
 	if (ret < 0) {
 		LOG_ERR("Failed to turn on display: %d", ret);
 		return ret;
 	}
-	return ret;
+
+	/* 额外延迟以确保开启稳定 */
+	k_msleep(10);
+
+	LOG_INF("ILI9806E display initialized successfully");
+	return 0;
 }
 
 static int ili9806e_blanking_on(const struct device *dev)
@@ -478,7 +479,7 @@ static int ili9806e_init(const struct device *dev)
 		mdev.pixfmt = MIPI_DSI_PIXFMT_RGB888;
 	}
 	mdev.data_lanes = cfg->data_lanes;
-	mdev.mode_flags = MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_LPM;
+	mdev.mode_flags = MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_LPM | MIPI_DSI_MODE_VIDEO_SYNC_PULSE;
 	mdev.timings.hactive = cfg->width;
 	mdev.timings.hbp = ILITEK_ILI9806E_HBP;
 	mdev.timings.hfp = ILITEK_ILI9806E_HFP;

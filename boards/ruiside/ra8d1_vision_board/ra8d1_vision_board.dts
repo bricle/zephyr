@@ -101,18 +101,18 @@
 	};
 };
 
-&pll2 {
-	status = "okay";
-	clocks = <&xtal>;
-	div = <1>;
-	mul = <48 0>;
+// &pll2 {
+// 	status = "okay";
+// 	clocks = <&xtal>;
+// 	div = <1>;
+// 	mul = <48 0>;
 
-	pll2r {
-		status = "okay";
-		freq = <DT_FREQ_M(480)>;
-		div = <2>;
-	};
-};
+// 	pll2r {
+// 		status = "okay";
+// 		freq = <DT_FREQ_M(480)>;
+// 		div = <2>;
+// 	};
+// };
 
 &sciclk {
 	clocks = <&pllp>;
@@ -127,8 +127,8 @@
 };
 
 &lcdclk {
-	clocks = <&pll2r>;
-	div = <2>;
+	clocks = <&pll>;
+	div = <4>;
 	status = "okay";
 };
 
@@ -260,6 +260,12 @@ zephyr_lcdif: &lcdif {
 	// input-pixel-format = <PANEL_PIXEL_FORMAT_RGB_888>;
 	output-pixel-format = <PANEL_PIXEL_FORMAT_RGB_565>;
 	output-clock-divisor = <8>;
+	// output-data-signal-polarity = "";
+	output-signal-sync-edge = "RISING";
+	def-back-color-alpha = <255>;
+	def-back-color-red = <255>;
+	def-back-color-green = <0>;
+	def-back-color-blue = <0>;
 	display-timings {
 		compatible = "zephyr,panel-timing";
 		hsync-active = <0>;          /* 高电平有效 -> 设置为0（低电平为非激活态） */
@@ -268,9 +274,11 @@ zephyr_lcdif: &lcdif {
 		syncclk-active = <1>;
 		pixelclk-active = <0>;
 		hback-porch = <20>;
+		// hback-porch = <16>;
 		hsync-len = <4>;
 		hfront-porch = <10>;
 		vback-porch = <10>;
+		// vback-porch = <6>;
 		vsync-len = <4>;
 		vfront-porch = <8>;
 		// clock-frequency = <DT_FREQ_M(40)>;
@@ -280,14 +288,32 @@ zephyr_lcdif: &lcdif {
 };
 
 zephyr_mipi_dsi: &mipi_dsi {
-	status = "okay";
+	// status = "okay";
+	// pll-div = <1>;
+	// pll-mul-int = <50>;
+	// pll-mul-frac = "0.00";
+	// lp-divisor = <5>;
+	// ulps-wakeup-period = <97>;
+	// video-mode-delay = <206>;
+	// timing = <1183 11 26 40>;
+
+	// phys-timing {
+	// 	t-init = <71999>;
+	// 	t-clk-prep = <8>;
+	// 	t-hs-prep = <5>;
+	// 	t-lp-exit = <7>;
+	// 	dphytim4 = <27 1 19 7>;
+	// 	dphytim5 = <19 8 11>;
+	// };
+		status = "okay";
 	pll-div = <1>;
 	pll-mul-int = <50>;
 	pll-mul-frac = "0.00";
 	lp-divisor = <5>;
 	ulps-wakeup-period = <97>;
-	video-mode-delay = <206>;
+	video-mode-delay = <186>;
 	timing = <1183 11 26 40>;
+	// timing = <480 360 10 20>;
 
 	phys-timing {
 		t-init = <71999>;
