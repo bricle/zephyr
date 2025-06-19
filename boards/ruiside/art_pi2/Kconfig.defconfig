@@ -1,0 +1,17 @@
+if BT
+
+# choice AIROC_PART
+# 	default CYW43438
+# endchoice
+
+# choice CYW4343W_MODULE
+# 	default CYW4343W_MURATA_1DX
+# endchoice
+choice AIROC_PART
+	default CYW4343W
+endchoice
+
+choice CYW4343W_MODULE
+	default CYW4343W_MURATA_1DX
+endchoice
+endif # BT
