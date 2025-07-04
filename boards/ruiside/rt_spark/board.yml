@@ -1,0 +1,6 @@
+board:
+  name: rt_spark
+  full_name: Rt-Thread Spark Spark No. 1 Development Board
+  vendor: others
+  socs:
+    - name: stm32f407xx

@@ -1,0 +1,15 @@
+identifier: rt_spark
+name: Rt-Thread Spark Spark No. 1 Development Boards
+type: mcu
+arch: arm
+toolchain:
+  - zephyr
+  - gnuarmemb
+ram: 192
+flash: 1024
+supported:
+  # - can
+  # - pwm
+  # - counter
+  # - spi
+  # - gpio
