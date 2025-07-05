@@ -16,6 +16,7 @@ config MEMC_STM32_SDRAM
 	default y
 	depends on DT_HAS_ST_STM32_FMC_SDRAM_ENABLED
 	select USE_STM32_LL_FMC
+	select USE_STM32_LL_FSMC
 	select USE_STM32_HAL_SDRAM
 	help
 	  Enable STM32 FMC SDRAM controller.
@@ -25,6 +26,7 @@ config MEMC_STM32_NOR_PSRAM
 	default y
 	depends on DT_HAS_ST_STM32_FMC_NOR_PSRAM_ENABLED
 	select USE_STM32_LL_FMC
+	select USE_STM32_LL_FSMC
 	select USE_STM32_HAL_NOR
 	select USE_STM32_HAL_SRAM
 	help

@@ -44,12 +44,12 @@ static int memc_stm32_nor_init(const struct memc_stm32_nor_psram_config *config,
 
 	memcpy(&hnor.Init, &bank_config->init, sizeof(hnor.Init));
 
-	if (bank_config->init.ExtendedMode == FMC_EXTENDED_MODE_ENABLE) {
-		ext_timing = (FMC_NORSRAM_TimingTypeDef *)&bank_config->timing_ext;
-	} else {
-		ext_timing = NULL;
-	}
-
+	// if (bank_config->init.ExtendedMode == FMC_EXTENDED_MODE_ENABLE) {
+	// 	ext_timing = (FMC_NORSRAM_TimingTypeDef *)&bank_config->timing_ext;
+	// } else {
+	// 	ext_timing = NULL;
+	// }
+	ext_timing = NULL;
 	if (HAL_NOR_Init(&hnor,
 			 (FMC_NORSRAM_TimingTypeDef *)&bank_config->timing,
 			 ext_timing) != HAL_OK) {
@@ -70,7 +70,7 @@ static int memc_stm32_psram_init(const struct memc_stm32_nor_psram_config *confi
 
 	memcpy(&hsram.Init, &bank_config->init, sizeof(hsram.Init));
 
-	if (bank_config->init.ExtendedMode == FMC_EXTENDED_MODE_ENABLE) {
+	if (bank_config->init.ExtendedMode == FSMC_EXTENDED_MODE_ENABLE) {
 		ext_timing = (FMC_NORSRAM_TimingTypeDef *)&bank_config->timing_ext;
 	} else {
 		ext_timing = NULL;
@@ -96,12 +96,12 @@ static int memc_stm32_nor_psram_init(const struct device *dev)
 		memory_type = config->banks[bank_idx].init.MemoryType;
 
 		switch (memory_type) {
-		case FMC_MEMORY_TYPE_NOR:
+		case FSMC_MEMORY_TYPE_NOR:
 			ret = memc_stm32_nor_init(config, &config->banks[bank_idx]);
 			break;
-		case FMC_MEMORY_TYPE_PSRAM:
+		case FSMC_MEMORY_TYPE_PSRAM:
 			__fallthrough;
-		case FMC_MEMORY_TYPE_SRAM:
+		case FSMC_MEMORY_TYPE_SRAM:
 			ret = memc_stm32_psram_init(config, &config->banks[bank_idx]);
 			break;
 		default:

@@ -3,10 +3,21 @@
 # Copyright (c) 2020 Intel Corporation
 # SPDX-License-Identifier: Apache-2.0
 
-if BOARD_RT_SPARKs
+if BOARD_RT_SPARK
 
 config SPI_STM32_INTERRUPT
 	default y
 	depends on SPI
+
+config MIPI_DBI_STM32_FMC_MEM_BARRIER
+	default n if MIPI_DBI_STM32_FMC
+
+if DISPLAY
+
+choice ST7789V_PIXEL_FORMAT
+	default ST7789V_BGR565
+endchoice
+
+endif # DISPLAY
 
 endif # BOARD_RT_SPARKs
