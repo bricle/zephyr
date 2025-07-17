@@ -1,18 +1,19 @@
 # AOSONG DHT20 temperature and humidity sensor configuration options
-# This driver can also be used for AHT20 or AM2301B which seem to be the same sensor
+# This driver can also be used for AHT20, AHT21 or AM2301B which seem to be the same sensor
 
 # Copyright (c) 2024 Nathan Olff
 # SPDX-License-Identifier: Apache-2.0
 
 config DHT20
-	bool "DHT20 / AHT20 / AM2301B Temperature and Humidity Sensor"
+	bool "DHT20 / AHT20 / AHT21 / AM2301B Temperature and Humidity Sensor"
 	default y
 	depends on DT_HAS_AOSONG_DHT20_ENABLED \
 		|| DT_HAS_AOSONG_AHT20_ENABLED \
+		|| DT_HAS_AOSONG_AHT21_ENABLED \
 		|| DT_HAS_AOSONG_AM2301B_ENABLED
 	select I2C
 	help
-	  Enable driver for DHT20 / AHT20 / AM2301B temperature and humidity sensors.
+	  Enable driver for DHT20 / AHT20 / AHT21 / AM2301B temperature and humidity sensors.
 
 if DHT20
 

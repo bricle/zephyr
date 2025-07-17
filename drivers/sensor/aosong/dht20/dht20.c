@@ -343,6 +343,22 @@ DT_INST_FOREACH_STATUS_OKAY(DEFINE_AHT20)
 #endif
 #undef DT_DRV_COMPAT
 
+#define DT_DRV_COMPAT aosong_aht21
+#if DT_HAS_COMPAT_STATUS_OKAY(DT_DRV_COMPAT)
+
+#define DEFINE_AHT21(n)                                                                            \
+	static struct dht20_data aht21_data_##n;                                                   \
+                                                                                                   \
+	static const struct dht20_config aht21_config_##n = {.bus = I2C_DT_SPEC_INST_GET(n)};      \
+                                                                                                   \
+	SENSOR_DEVICE_DT_INST_DEFINE(n, dht20_init, NULL, &aht21_data_##n, &aht21_config_##n,      \
+				     POST_KERNEL, CONFIG_SENSOR_INIT_PRIORITY, &dht20_driver_api);
+
+DT_INST_FOREACH_STATUS_OKAY(DEFINE_AHT21)
+
+#endif
+#undef DT_DRV_COMPAT
+
 #define DT_DRV_COMPAT aosong_am2301b
 #if DT_HAS_COMPAT_STATUS_OKAY(DT_DRV_COMPAT)
 
