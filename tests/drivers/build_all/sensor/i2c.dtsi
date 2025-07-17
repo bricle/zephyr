@@ -1017,6 +1017,12 @@ test_i2c_aht20: aht20@88 {
 	status = "okay";
 };
 
+test_i2c_aht21: aht21@38 {
+	compatible = "aosong,aht21";
+	reg = <0x38>;
+	status = "okay";
+};
+
 test_i2c_am2301b: am2301b@89 {
 	compatible = "aosong,am2301b";
 	reg = <0x89>;

@@ -1,0 +1,12 @@
+# Copyright The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+    Aosong AHT21 (Digital-output Humidity and Temperature Sensor)
+
+    The Aosong AHT21 sensor provides temperature and humidity
+    measurements through an I2C bus.
+
+compatible: "aosong,aht21"
+
+include: [sensor-device.yaml, i2c-device.yaml]
