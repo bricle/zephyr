@@ -120,7 +120,8 @@ if(CONFIG_CYW43438 AND NOT CONFIG_AIROC_WIFI_CUSTOM)
     zephyr_library_sources(${hal_blobs_dir}/firmware/COMPONENT_43438/43438A1_bin.c)
     zephyr_library_sources(${hal_blobs_dir}/clm/COMPONENT_43438/43438A1_clm_blob.c)
   endif()
-
+  # nvram
+  zephyr_include_directories(${hal_wifi_dir_resources}/nvram/COMPONENT_43438/COMPONENT_AW-CU427-P)
 endif()
 
 # CYW43439 firmware
