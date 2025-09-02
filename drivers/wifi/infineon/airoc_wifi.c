@@ -878,7 +878,7 @@ static const struct net_wifi_mgmt_offload airoc_api = {
 };
 
 NET_DEVICE_DT_INST_DEFINE(0, airoc_init, NULL, &airoc_wifi_data, &airoc_wifi_config,
-			  CONFIG_WIFI_INIT_PRIORITY, &airoc_api, ETHERNET_L2,
+			  CONFIG_AIROC_WIFI_INIT_PRIORITY, &airoc_api, ETHERNET_L2,
 			  NET_L2_GET_CTX_TYPE(ETHERNET_L2), WHD_LINK_MTU);
 
 CONNECTIVITY_WIFI_MGMT_BIND(Z_DEVICE_DT_DEV_ID(DT_DRV_INST(0)));

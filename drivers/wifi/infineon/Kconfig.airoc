@@ -35,6 +35,12 @@ config AIROC_WIFI_BUS_SPI
 	help
 	  Enable SPI bus support
 
+config AIROC_WIFI_INIT_PRIORITY
+	int "Default init priority for AIROC Wi-Fi drivers"
+	default 90
+	help
+	  Default init priority for AIROC Wi-Fi drivers
+
 config AIROC_WIFI6
 	bool
 
