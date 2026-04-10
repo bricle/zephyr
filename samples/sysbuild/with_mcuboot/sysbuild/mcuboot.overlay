@@ -1,0 +1,16 @@
+// / {
+//   aliases {
+// 		mcuboot-button0 = &button2;
+// 		mcuboot-led0 = &led3;
+//   };
+// };
+
+
+
+// for frdm_mcxn947_mcxn947_cpu0.dtsi
+/ {
+  aliases {
+		mcuboot-button0 = &user_button_2;
+		mcuboot-led0 = &green_led;
+  };
+};

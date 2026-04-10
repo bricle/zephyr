@@ -1,0 +1,10 @@
+/{
+    	chosen {
+		// zephyr,console = &usart1;
+		// zephyr,shell-uart = &usart1;
+		// zephyr,sram = &sram0;
+		// zephyr,flash = &flash0;
+		// zephyr,ccm = &ccm0;
+		zephyr,code-partition = &slot1_partition;
+	};
+};
