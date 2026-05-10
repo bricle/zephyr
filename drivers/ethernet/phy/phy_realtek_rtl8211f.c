@@ -56,7 +56,11 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 #define PHY_RT_RTL8211F_INER_LINKSTATUS_CHANGE_MASK BIT(4)
 #define PHY_RT_RTL8211F_INSR_REG                    (0x1DU)
 
-#define PHY_RT_RTL8211F_RESET_HOLD_TIME_MS 10
+#define PHY_RT_RTL8211F_RESET_HOLD_TIME_MS 20
+#define PHY_RT_RTL8211F_RESET_WAIT_TIME_MS 500
+
+#define PHY_RT_RTL8211F_ADDR_MIN 0U
+#define PHY_RT_RTL8211F_ADDR_MAX 7U
 
 struct rt_rtl8211f_config {
 	uint8_t addr;
@@ -114,10 +118,62 @@ static int phy_rt_rtl8211f_write(const struct device *dev,
 	return 0;
 }
 
+static void phy_rt_rtl8211f_scan_mdio(const struct device *dev)
+{
+	const struct rt_rtl8211f_config *config = dev->config;
+	uint16_t bmcr;
+	uint16_t bmsr;
+	uint16_t phyid1;
+	uint16_t phyid2;
+	int ret;
+
+	LOG_INF("Scanning MDIO bus %s", config->mdio_dev->name);
+
+	for (uint8_t addr = PHY_RT_RTL8211F_ADDR_MIN;
+	     addr <= PHY_RT_RTL8211F_ADDR_MAX; addr++) {
+		ret = mdio_read(config->mdio_dev, addr, MII_BMCR, &bmcr);
+		if (ret) {
+			LOG_DBG("PHY addr %u: failed to read BMCR (%d)", addr, ret);
+			continue;
+		}
+
+		ret = mdio_read(config->mdio_dev, addr, MII_BMSR, &bmsr);
+		if (ret) {
+			LOG_DBG("PHY addr %u: failed to read BMSR (%d)", addr, ret);
+			continue;
+		}
+
+		ret = mdio_read(config->mdio_dev, addr, MII_PHYID1R, &phyid1);
+		if (ret) {
+			LOG_DBG("PHY addr %u: failed to read PHYID1 (%d)", addr, ret);
+			continue;
+		}
+
+		ret = mdio_read(config->mdio_dev, addr, MII_PHYID2R, &phyid2);
+		if (ret) {
+			LOG_DBG("PHY addr %u: failed to read PHYID2 (%d)", addr, ret);
+			continue;
+		}
+
+		if ((phyid1 == 0xffffU && phyid2 == 0xffffU) ||
+		    (phyid1 == 0x0000U && phyid2 == 0x0000U)) {
+			LOG_DBG("PHY addr %u: bmcr=0x%04x bmsr=0x%04x id=0x%04x 0x%04x",
+				addr, bmcr, bmsr, phyid1, phyid2);
+			continue;
+		}
+
+		LOG_ERR("PHY addr %u: bmcr=0x%04x bmsr=0x%04x id=0x%04x 0x%04x%s%s",
+			addr, bmcr, bmsr, phyid1, phyid2,
+			phyid1 == REALTEK_OUI_MSB ? " realtek-oui" : "",
+			addr == config->addr ? " (configured)" : "");
+	}
+}
+
 static int phy_rt_rtl8211f_reset(const struct device *dev)
 {
 	const struct rt_rtl8211f_config *config = dev->config;
 	uint32_t reg_val;
+	uint32_t wait_ms;
 	int ret;
 
 #if DT_ANY_INST_HAS_PROP_STATUS_OKAY(reset_gpios)
@@ -138,11 +194,15 @@ static int phy_rt_rtl8211f_reset(const struct device *dev)
 		}
 
 		/* Wait another 30 ms (circuits settling time) before accessing registers */
-		k_busy_wait(USEC_PER_MSEC * 30);
+		k_busy_wait(USEC_PER_MSEC * 80);
+
+		phy_rt_rtl8211f_scan_mdio(dev);
 
 		goto finalize_reset;
 	}
 #endif /* DT_ANY_INST_HAS_PROP_STATUS_OKAY(reset_gpios) */
+
+	// phy_rt_rtl8211f_scan_mdio(dev);
 
 	/* Reset PHY using register */
 	ret = phy_rt_rtl8211f_write(dev, MII_BMCR, MII_BMCR_RESET);
@@ -155,13 +215,22 @@ static int phy_rt_rtl8211f_reset(const struct device *dev)
 	k_busy_wait(USEC_PER_MSEC * PHY_RT_RTL8211F_RESET_HOLD_TIME_MS);
 
 	/* Wait for the reset to be cleared */
-	do {
+	for (wait_ms = 0U; wait_ms < PHY_RT_RTL8211F_RESET_WAIT_TIME_MS; wait_ms++) {
 		ret = phy_rt_rtl8211f_read(dev, MII_BMCR, &reg_val);
 		if (ret) {
 			LOG_ERR("Error reading phy (%d) basic control register", config->addr);
 			return ret;
 		}
-	} while (reg_val & MII_BMCR_RESET);
+
+		if ((reg_val & MII_BMCR_RESET) == 0U) {
+			goto finalize_reset;
+		}
+
+		k_busy_wait(USEC_PER_MSEC);
+	}
+
+	LOG_ERR("PHY (%d) reset timed out, last BMCR=0x%04x", config->addr, reg_val);
+	return -ETIMEDOUT;
 
 	goto finalize_reset;
 
@@ -174,8 +243,6 @@ finalize_reset:
 			return ret;
 		}
 	} while (reg_val != REALTEK_OUI_MSB);
-
-	return 0;
 }
 
 static int phy_rt_rtl8211f_restart_autonegotiation(const struct device *dev)
@@ -391,7 +458,7 @@ static void phy_rt_rtl8211f_interrupt_handler(const struct device *port,
 {
 	struct rt_rtl8211f_data *data = CONTAINER_OF(cb, struct rt_rtl8211f_data, gpio_callback);
 	int ret;
-
+	LOG_ERR("test isrdffffff");
 	ret = k_work_reschedule(&data->phy_monitor_work, K_NO_WAIT);
 	if (ret < 0) {
 		LOG_ERR("Failed to schedule phy_monitor_work from ISR");

@@ -190,7 +190,8 @@ static int sdmmc_read_scr(struct sd_card *card)
 	raw_scr[0] = sys_be32_to_cpu(scr[0]);
 	raw_scr[1] = sys_be32_to_cpu(scr[1]);
 	sdmmc_decode_scr(&card_scr, raw_scr, &card->sd_version);
-	LOG_DBG("SD reports specification version %d", card->sd_version);
+	LOG_INF("SD SCR: spec=%u sd_width=0x%x cmd_support=0x%x raw=%08x %08x",
+		card->sd_version, card_scr.sd_width, card_scr.cmd_support, raw_scr[0], raw_scr[1]);
 	/* Check card supported bus width */
 	if (card_scr.sd_width & 0x4U) {
 		card->flags |= SD_4BITS_WIDTH;
@@ -203,6 +204,10 @@ static int sdmmc_read_scr(struct sd_card *card)
 	if (card_scr.cmd_support & 0x2U) {
 		card->flags |= SD_CMD23_FLAG;
 	}
+	LOG_INF("SD SCR caps: card_4bit=%u speed_class=%u cmd23=%u flags=0x%x",
+		!!(card->flags & SD_4BITS_WIDTH),
+		!!(card->flags & SD_SPEED_CLASS_CONTROL_FLAG),
+		!!(card->flags & SD_CMD23_FLAG), card->flags);
 	return 0;
 }
 
@@ -227,7 +232,22 @@ static int sdmmc_set_blocklen(struct sd_card *card, uint32_t block_len)
 static int sdmmc_set_bus_width(struct sd_card *card, enum sdhc_bus_width width)
 {
 	struct sdhc_command cmd = {0};
+	uint8_t width_bits;
 	int ret;
+
+	switch (width) {
+	case SDHC_BUS_WIDTH1BIT:
+		width_bits = 1U;
+		break;
+	case SDHC_BUS_WIDTH4BIT:
+		width_bits = 4U;
+		break;
+	default:
+		LOG_ERR("Unsupported SD bus width request: %u", width);
+		return -ENOTSUP;
+	}
+
+	LOG_INF("Attempting SD bus width change to %u-bit", width_bits);
 
 	/*
 	 * The specification strictly requires card interrupts to be masked, but
@@ -236,7 +256,7 @@ static int sdmmc_set_bus_width(struct sd_card *card, enum sdhc_bus_width width)
 	/* Send ACMD6 to change bus width */
 	ret = sdmmc_app_command(card, card->relative_addr);
 	if (ret) {
-		LOG_DBG("SD app command failed for ACMD6");
+		LOG_ERR("SD app command failed before ACMD6 %u-bit switch: %d", width_bits, ret);
 		return ret;
 	}
 
@@ -244,33 +264,27 @@ static int sdmmc_set_bus_width(struct sd_card *card, enum sdhc_bus_width width)
 	cmd.response_type = SD_RSP_TYPE_R1;
 	cmd.timeout_ms = CONFIG_SD_CMD_TIMEOUT;
 	cmd.retries = CONFIG_SD_CMD_RETRIES;
+	cmd.arg = (width == SDHC_BUS_WIDTH4BIT) ? 2U : 0U;
 
-	switch (width) {
-	case SDHC_BUS_WIDTH1BIT:
-		cmd.arg = 0U;
-		break;
-	case SDHC_BUS_WIDTH4BIT:
-		cmd.arg = 2U;
-		break;
-	default:
-		return -ENOTSUP;
-	}
 	/* Send app command */
 	ret = sdhc_request(card->sdhc, &cmd, NULL);
 	if (ret) {
-		LOG_DBG("Error on ACMD6: %d", ret);
+		LOG_ERR("ACMD6 failed while switching to %u-bit bus: %d", width_bits, ret);
 		return ret;
 	}
 	ret = sd_check_response(&cmd);
 	if (ret) {
-		LOG_DBG("ACMD6 reports error, response 0x%x", cmd.response[0U]);
+		LOG_ERR("ACMD6 rejected %u-bit bus, response=0x%x ret=%d",
+			width_bits, cmd.response[0U], ret);
 		return ret;
 	}
 	/* Card now has changed bus width. Change host bus width */
 	card->bus_io.bus_width = width;
 	ret = sdhc_set_io(card->sdhc, &card->bus_io);
 	if (ret) {
-		LOG_DBG("Could not change host bus width");
+		LOG_ERR("Host could not change to %u-bit bus: %d", width_bits, ret);
+	} else {
+		LOG_INF("SD bus width changed to %u-bit", width_bits);
 	}
 	return ret;
 }
@@ -322,7 +336,7 @@ static int sdmmc_read_switch(struct sd_card *card)
 	 */
 	ret = sdmmc_switch(card, SD_SWITCH_CHECK, 0, 0, status);
 	if (ret) {
-		LOG_DBG("CMD6 failed %d", ret);
+		LOG_ERR("CMD6 switch capability read failed: %d", ret);
 		return ret;
 	}
 	/*
@@ -357,6 +371,10 @@ static int sdmmc_read_switch(struct sd_card *card)
 		card->switch_caps.sd_drv_type = status[9];
 		card->switch_caps.sd_current_limit = status[7];
 	}
+	LOG_INF("SD switch caps: bus_speed=0x%02x hs_max_dtr=%u uhs_max_dtr=%u drv=0x%02x current=0x%02x",
+		card->switch_caps.bus_speed, card->switch_caps.hs_max_dtr,
+		card->switch_caps.uhs_max_dtr, card->switch_caps.sd_drv_type,
+		card->switch_caps.sd_current_limit);
 	return 0;
 }
 
@@ -392,6 +410,9 @@ static inline void sdmmc_select_bus_speed(struct sd_card *card)
 			card->card_speed = SD_TIMING_DEFAULT;
 		}
 	}
+	LOG_INF("SD selected timing=%u host_high_speed=%u card_bus_speed=0x%02x",
+		card->card_speed, card->host_props.host_caps.high_spd_support,
+		card->switch_caps.bus_speed);
 }
 
 /* Selects driver type for SD card */
@@ -576,21 +597,46 @@ static int sdmmc_init_uhs(struct sd_card *card)
 static int sdmmc_init_hs(struct sd_card *card)
 {
 	int ret;
+	bool hs_supported = true;
 
-	if ((!card->host_props.host_caps.high_spd_support) ||
-	    (card->sd_version < SD_SPEC_VER1_1) ||
-	    (card->switch_caps.hs_max_dtr == HS_UNSUPPORTED)) {
+	if (!card->host_props.host_caps.high_spd_support) {
 		/* No high speed support. Leave card untouched */
-		return 0;
+		LOG_INF("Skipping HS mode: host high-speed unsupported host_4bit=%u card_4bit=%u",
+			card->host_props.bus_4_bit_support, !!(card->flags & SD_4BITS_WIDTH));
+		hs_supported = false;
 	}
-	/* Select bus speed for card depending on host and card capability*/
-	sdmmc_select_bus_speed(card);
-	/* Apply selected bus speed */
-	ret = sdmmc_set_bus_speed(card);
-	if (ret) {
-		LOG_ERR("Failed to switch card to HS mode");
-		return ret;
+
+	if (card->sd_version < SD_SPEC_VER1_1) {
+		/* No high speed support. Leave card untouched */
+		LOG_INF("Skipping HS mode: SD spec version %u is older than 1.1 host_4bit=%u card_4bit=%u",
+			card->sd_version, card->host_props.bus_4_bit_support,
+			!!(card->flags & SD_4BITS_WIDTH));
+		hs_supported = false;
 	}
+
+	if (card->switch_caps.hs_max_dtr == HS_UNSUPPORTED) {
+		/* No high speed support. Leave card untouched */
+		LOG_INF("Skipping HS mode: card high-speed unsupported bus_speed=0x%02x host_4bit=%u card_4bit=%u",
+			card->switch_caps.bus_speed, card->host_props.bus_4_bit_support,
+			!!(card->flags & SD_4BITS_WIDTH));
+		hs_supported = false;
+	}
+
+	if (hs_supported) {
+		/* Select bus speed for card depending on host and card capability*/
+		sdmmc_select_bus_speed(card);
+		/* Apply selected bus speed */
+		ret = sdmmc_set_bus_speed(card);
+		if (ret) {
+			LOG_ERR("Failed to switch card to HS mode");
+			return ret;
+		}
+	}
+
+	LOG_INF("Checking 4-bit switch: hs_configured=%u host_4bit=%u card_4bit=%u flags=0x%x",
+		hs_supported,
+		card->host_props.bus_4_bit_support, !!(card->flags & SD_4BITS_WIDTH),
+		card->flags);
 	if (card->host_props.bus_4_bit_support && (card->flags & SD_4BITS_WIDTH)) {
 		/* Raise bus width to 4 bits */
 		ret = sdmmc_set_bus_width(card, SDHC_BUS_WIDTH4BIT);
@@ -598,6 +644,10 @@ static int sdmmc_init_hs(struct sd_card *card)
 			LOG_ERR("Failed to change card bus width to 4 bits");
 			return ret;
 		}
+	} else {
+		LOG_INF("Skipping 4-bit bus width: host_4bit=%u card_4bit=%u flags=0x%x",
+			card->host_props.bus_4_bit_support, !!(card->flags & SD_4BITS_WIDTH),
+			card->flags);
 	}
 	return 0;
 }

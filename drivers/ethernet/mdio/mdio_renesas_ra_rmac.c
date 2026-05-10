@@ -143,6 +143,10 @@ static int mdio_renesas_ra_initialize(const struct device *dev)
 	mdio_capture_time = DIV_ROUND_UP((config->mdio_capture_time * eswclk), 1e9);
 	mpic_psmcs = ((eswclk / config->mdc_clock_rate) / 2) - 1;
 
+	LOG_INF("MDIO %s: channel=%u eswclk=%uHz mdc=%uHz psmcs=%u capture=%u hold=%u",
+		dev->name, config->channel, eswclk, config->mdc_clock_rate, mpic_psmcs,
+		mdio_capture_time, mdio_hold_time);
+
 	r_rmac_phy_set_operation_mode(config->channel, RENESAS_RA_ETHA_DISABLE_MODE);
 	r_rmac_phy_set_operation_mode(config->channel, RENESAS_RA_ETHA_CONFIG_MODE);
 	*config->reg.mpic =

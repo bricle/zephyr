@@ -92,6 +92,25 @@ static void ra_sdmmc_dma_req_isr(const void *parameter)
 	sdhimmc_dma_req_isr();
 }
 
+static void sdhc_ra_log_speed_state(const struct device *dev, const char *tag,
+				    const struct sdhc_io *ios)
+{
+	struct sdhc_ra_priv *priv = dev->data;
+	const struct sdhc_ra_config *cfg = dev->config;
+	const R_SDHI0_Type *regs = (const R_SDHI0_Type *)cfg->regs;
+	uint32_t req_clock = ios ? ios->clock : priv->bus_clock;
+	uint32_t req_width = ios ? ios->bus_width : 0U;
+	int req_timing = ios ? (int)ios->timing : 0;
+	uint32_t source_clock = R_FSP_SystemClockHzGet(BSP_FEATURE_SDHI_CLOCK);
+
+	LOG_INF("%s: req_clock=%uHz actual_sdclk=%uHz source_clk=%uHz "
+		"req_width=%u active_width=%u req_timing=%d active_timing=%d "
+		"f_min=%uHz f_max=%uHz SD_CLK_CTRL=0x%08x SD_OPTION=0x%08x",
+		tag, req_clock, priv->sdmmc_ctrl.device.clock_rate, source_clock,
+		req_width, priv->bus_width, req_timing, (int)priv->timing,
+		priv->props.f_min, priv->props.f_max, regs->SD_CLK_CTRL, regs->SD_OPTION);
+}
+
 static int sdhc_ra_get_card_present(const struct device *dev)
 {
 	struct sdhc_ra_priv *priv = dev->data;
@@ -300,22 +319,33 @@ static int sdhc_ra_request(const struct device *dev, struct sdhc_command *cmd,
 	case SD_SWITCH:
 		/* Check app cmd */
 		if (priv->app_cmd && cmd->opcode == SD_APP_SET_BUS_WIDTH) {
-			/* ACMD41*/
+			LOG_INF("SDHI ACMD6 bus width command: arg=0x%08x app_cmd=%u",
+				ra_cmd.arg, priv->app_cmd);
+			/* ACMD6 */
 			ra_cmd.opcode |= SDHI_PRV_CMD_C_ACMD;
 			ret = sdhc_ra_send_cmd(priv, &ra_cmd, retries);
 			if (ret < 0) {
+				LOG_ERR("SDHI ACMD6 failed: ret=%d rsp10=0x%08x", ret,
+					priv->sdmmc_ctrl.p_reg->SD_RSP10);
 				goto end;
 			}
+			LOG_INF("SDHI ACMD6 completed: rsp10=0x%08x",
+				priv->sdmmc_ctrl.p_reg->SD_RSP10);
 		} else {
 			/* SD SWITCH CMD6*/
+			LOG_INF("SDHI CMD6 switch command: arg=0x%08x block_size=%u",
+				ra_cmd.arg, ra_cmd.sector_size);
 			fsp_err = r_sdhi_read_and_block(&priv->sdmmc_ctrl, ra_cmd.opcode,
 							ra_cmd.arg, ra_cmd.sector_size);
 			ret = err_fsp2zep(fsp_err);
 			if (ret < 0) {
+				LOG_ERR("SDHI CMD6 switch read failed: ret=%d fsp_err=%d",
+					ret, fsp_err);
 				goto end;
 			}
-			memcpy(ra_cmd.data, priv->sdmmc_ctrl.aligned_buff, 8);
+			memcpy(ra_cmd.data, priv->sdmmc_ctrl.aligned_buff, ra_cmd.sector_size);
 			priv->sdmmc_event.transfer_completed = false;
+			LOG_INF("SDHI CMD6 switch read completed");
 			break;
 		}
 		break;
@@ -454,6 +484,9 @@ static int sdhc_ra_set_io(const struct device *dev, struct sdhc_io *ios)
 	uint32_t bus_width_reg;
 
 	if (ios->bus_width > 0) {
+		uint32_t old_sd_option;
+		uint32_t new_sd_option;
+
 		bus_width_reg = 0;
 		/* Set bus width, SD bus interface doesn't support 8BIT */
 		switch (ios->bus_width) {
@@ -470,17 +503,21 @@ static int sdhc_ra_set_io(const struct device *dev, struct sdhc_io *ios)
 		}
 
 		if (priv->bus_width != bus_width) {
+			old_sd_option = ((R_SDHI0_Type *)cfg->regs)->SD_OPTION;
+			new_sd_option = SDHI_PRV_SD_OPTION_DEFAULT |
+					(bus_width_reg << SDHI_PRV_SD_OPTION_WIDTH8_BIT);
 			/* Set the bus width in the SDHI peripheral. */
-			((R_SDHI0_Type *)cfg->regs)->SD_OPTION =
-				SDHI_PRV_SD_OPTION_DEFAULT |
-				(bus_width_reg << SDHI_PRV_SD_OPTION_WIDTH8_BIT);
+			((R_SDHI0_Type *)cfg->regs)->SD_OPTION = new_sd_option;
 			priv->bus_width = bus_width;
+			LOG_INF("SDHI bus width register update: req_width=%u active_width=%u SD_OPTION=0x%08x->0x%08x",
+				ios->bus_width, bus_width, old_sd_option, new_sd_option);
 		}
 	}
 
 	if (ios->clock) {
 		if (ios->clock > priv->props.f_max || ios->clock < priv->props.f_min) {
-			LOG_ERR("Proposed clock outside supported host range");
+			LOG_ERR("Proposed clock %uHz outside supported host range [%uHz, %uHz]",
+				ios->clock, priv->props.f_min, priv->props.f_max);
 			return -EINVAL;
 		}
 
@@ -513,6 +550,12 @@ static int sdhc_ra_set_io(const struct device *dev, struct sdhc_io *ios)
 		}
 	}
 end:
+	if (ret == 0) {
+		sdhc_ra_log_speed_state(dev, "set_io", ios);
+	} else {
+		LOG_ERR("set_io failed: ret=%d req_clock=%uHz req_width=%u req_timing=%d",
+			ret, ios->clock, ios->bus_width, (int)ios->timing);
+	}
 
 	return ret;
 }
@@ -575,6 +618,11 @@ static int sdhc_ra_init(const struct device *dev)
 	priv->bus_width = SDMMC_BUS_WIDTH_1_BIT;
 	priv->timing = SDHC_TIMING_LEGACY;
 	priv->bus_clock = SDMMC_CLOCK_400KHZ;
+	LOG_INF("host: channel=%u dt_bus_width=%u high_speed=%u bus_4bit=%u sdma=%u",
+		priv->fsp_config.channel, priv->fsp_config.bus_width,
+		priv->props.host_caps.high_spd_support, priv->props.bus_4_bit_support,
+		priv->props.host_caps.sdma_support);
+	sdhc_ra_log_speed_state(dev, "init", NULL);
 
 end:
 	k_sem_give(&priv->thread_lock);
