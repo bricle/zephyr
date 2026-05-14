@@ -222,6 +222,8 @@ static int sdhc_ra_request(const struct device *dev, struct sdhc_command *cmd,
 	case SD_SEND_RELATIVE_ADDR:
 	case SD_SELECT_CARD:
 	case SD_SEND_IF_COND:
+	case SDIO_SEND_OP_COND:
+	case SDIO_RW_DIRECT:
 	case SD_SET_BLOCK_SIZE:
 	case SD_ERASE_BLOCK_START:
 	case SD_ERASE_BLOCK_END:
@@ -361,6 +363,48 @@ static int sdhc_ra_request(const struct device *dev, struct sdhc_command *cmd,
 			goto end;
 		}
 		memcpy(ra_cmd.data, priv->sdmmc_ctrl.aligned_buff, 8);
+		priv->sdmmc_event.transfer_completed = false;
+		break;
+	case SDIO_RW_EXTENDED:
+		if ((data == NULL) || (data->data == NULL)) {
+			ret = -EINVAL;
+			goto end;
+		}
+
+		if (cmd->arg & BIT(SDIO_CMD_ARG_RW_SHIFT)) {
+			ra_cmd.opcode = SDHI_PRV_CMD_IO_WRITE_EXT_SINGLE_BLOCK;
+			fsp_err = r_sdhi_transfer_write(&priv->sdmmc_ctrl,
+							ra_cmd.sector_count,
+							ra_cmd.sector_size,
+							ra_cmd.data);
+		} else {
+			ra_cmd.opcode = SDHI_PRV_CMD_IO_READ_EXT_SINGLE_BLOCK;
+			fsp_err = r_sdhi_transfer_read(&priv->sdmmc_ctrl,
+						       ra_cmd.sector_count,
+						       ra_cmd.sector_size, ra_cmd.data);
+		}
+		if (cmd->arg & BIT(SDIO_EXTEND_CMD_ARG_BLK_SHIFT)) {
+			ra_cmd.opcode |= SDHI_PRV_CMD_IO_EXT_MULTI_BLOCK;
+		}
+		ret = err_fsp2zep(fsp_err);
+		if (ret < 0) {
+			goto end;
+		}
+
+		r_sdhi_read_write_common(&priv->sdmmc_ctrl, ra_cmd.sector_count,
+					 ra_cmd.sector_size, ra_cmd.opcode, ra_cmd.arg);
+
+		ret = k_sem_take(&priv->sdmmc_event.transfer_sem, K_MSEC(ra_cmd.timeout_ms));
+		if (ret < 0) {
+			LOG_ERR("Can not take sem!");
+			goto end;
+		}
+
+		if (!priv->sdmmc_event.transfer_completed) {
+			ret = -EIO;
+			goto end;
+		}
+
 		priv->sdmmc_event.transfer_completed = false;
 		break;
 	case SD_READ_SINGLE_BLOCK:
